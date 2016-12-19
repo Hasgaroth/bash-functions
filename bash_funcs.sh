@@ -23,13 +23,28 @@ theDTS=`date +"%Y-%m-%d-%H-%M-%S"`
 startTimeime=`date +"%s"`
 
 ################################################################################
+# Enable logging to /var/log/${scriptName}/${theDate}.log if we are running as
+# a scheduled cron task
+if [ ! -t 1 ]
+then
+    if [ ${logfile} = "" ]; then
+        mkdir -p /var/log/${scriptName}
+        logfile="/var/log/${scriptName}/${theDate}.log"
+    fi
+    # Close STDOUT & STDERR FD
+    exec 1<&-; exec 2<&-
+    # Redirect STDOUT & STDERR to logfile
+    exec 1>>${logfile}; exec 2>>${logfile}
+fi
+
+################################################################################
 # obtainLock - Obtains a lock file based on the calling program name...
 function obtainLock () {
 
-    # Allow for a lockFile override if provided
-	[ "" = "${lockFile}" ] && lockFile="/tmp/${scriptName}.lock"
+    # Allow for a lockfile override if provided
+	[ "" = "${lockfile}" ] && lockfile="/tmp/${scriptName}.lock"
 
-	verbose "Locking with ${lockFile}"
+	verbose "Locking with ${lockfile}"
 
 	if [ -f /usr/bin/lockfile ]
 	then
@@ -39,21 +54,21 @@ function obtainLock () {
 		[ "" != "$1" ] && locktimeout="-l $1"
 
 		# Attempt to create the lock file
-		/usr/bin/lockfile -8 -r 5 ${locktimeout} ${lockFile}
+		/usr/bin/lockfile -8 -r 5 ${locktimeout} ${lockfile}
 		lockStatus=$?
 
 	else
 		# We have to resort to an old method
 
 		# Attempt to create the lock file
-		touch ${lockFile} 2>/dev/null
+		touch ${lockfile} 2>/dev/null
 		lockStatus=$?
 
 	fi
 
 	if [ ${lockStatus} -ne 0 ]
 	then
-		message "Obtaining lockfile ${lockFile} failed... - already running?"
+		message "Obtaining lockfile ${lockfile} failed... - already running?"
 		exit -1
 	fi
 
@@ -62,9 +77,7 @@ function obtainLock () {
 ################################################################################
 # removeLock - Obtains a lock file based on the calling program name...
 function removeLock () {
-
-	[ -f "${lockFile}" ] && /bin/rm -f "${lockFile}" > /dev/null 2>&1
-
+	[ -f "${lockfile}" ] && /bin/rm -f "${lockfile}" > /dev/null 2>&1
 }
 
 ################################################################################
@@ -94,9 +107,6 @@ function message () {
 	thedate=`date +"%d-%b-%Y %H:%M:%S"`
 	# This is a normal message statement - always show
 	echo "${thedate},$1"
-
-	# And write to the logfile if one is specified
-	[ "${logfile}" != "" ] && echo "${thedate},$1" >> ${logfile}
 
 	msgType=$2
 	[ "${msgType}" = "" ] && msgType="bash/${scriptName}"
